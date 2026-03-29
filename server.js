@@ -357,7 +357,7 @@ io.on('connection', (socket) => {
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   const proto = process.env.USE_HTTPS === 'true' ? 'https' : 'http';
   console.log(`\n🔥 DemonicMusicHost running at ${proto}://localhost:${PORT}\n`);
