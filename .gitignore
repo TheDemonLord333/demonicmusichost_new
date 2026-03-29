@@ -2,4 +2,8 @@ node_modules/
 .env
 logs/
 *.log
+uploads/
+*.pem
+*.key
+*.cert
 

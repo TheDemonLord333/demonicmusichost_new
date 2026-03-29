@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <rect width="200" height="200" fill="#16151f"/>
+  <rect x="1" y="1" width="198" height="198" fill="none" stroke="#2a2a3e" stroke-width="1"/>
+  <!-- Demonic music note design -->
+  <circle cx="100" cy="100" r="60" fill="none" stroke="#2a2a3e" stroke-width="1.5"/>
+  <circle cx="100" cy="100" r="40" fill="none" stroke="#3a1a1a" stroke-width="1"/>
+  <circle cx="100" cy="100" r="16" fill="#1e1d2a" stroke="#7a0006" stroke-width="1.5"/>
+  <circle cx="100" cy="100" r="5" fill="#7a0006"/>
+  <!-- Vinyl grooves -->
+  <circle cx="100" cy="100" r="52" fill="none" stroke="#1e1d2a" stroke-width="1.5"/>
+  <circle cx="100" cy="100" r="47" fill="none" stroke="#1e1d2a" stroke-width="1"/>
+  <circle cx="100" cy="100" r="44" fill="none" stroke="#1e1d2a" stroke-width="1"/>
+  <!-- Musical note -->
+  <g transform="translate(100,100)" fill="#7a0006" opacity="0.7">
+    <rect x="-2" y="-28" width="4" height="20" rx="2"/>
+    <rect x="6" y="-28" width="4" height="14" rx="2"/>
+    <rect x="-2" y="-28" width="12" height="4" rx="1"/>
+    <ellipse cx="-4" cy="-8" rx="6" ry="4" transform="rotate(-15)"/>
+    <ellipse cx="7" cy="-14" rx="6" ry="4" transform="rotate(-15)"/>
+  </g>
+</svg>

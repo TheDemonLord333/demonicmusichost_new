@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DemonicMusicHost</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body class="home-page">
+
+  <!-- Animated background -->
+  <div class="bg-particles" id="bgParticles"></div>
+
+  <div class="home-container">
+
+    <!-- Logo -->
+    <header class="home-header">
+      <div class="logo-wrap">
+        <div class="logo-icon">
+          <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M30 5 L55 20 L55 40 L30 55 L5 40 L5 20 Z" fill="none" stroke="#8b0000" stroke-width="2"/>
+            <path d="M30 8 L52 22 L52 38 L30 52 L8 38 L8 22 Z" fill="#0f0a0a" stroke="#cc0000" stroke-width="1"/>
+            <circle cx="30" cy="30" r="12" fill="none" stroke="#cc0000" stroke-width="1.5"/>
+            <circle cx="30" cy="30" r="4" fill="#cc0000"/>
+            <line x1="30" y1="18" x2="30" y2="26" stroke="#cc0000" stroke-width="2"/>
+            <line x1="30" y1="34" x2="30" y2="42" stroke="#cc0000" stroke-width="2"/>
+            <line x1="18" y1="30" x2="26" y2="30" stroke="#cc0000" stroke-width="2"/>
+            <line x1="34" y1="30" x2="42" y2="30" stroke="#cc0000" stroke-width="2"/>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <h1>DemonicMusicHost</h1>
+          <span class="logo-sub">DMH — Shared Music Sessions</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main cards -->
+    <main class="home-main">
+      <!-- Create Session -->
+      <div class="card card-create">
+        <div class="card-icon">🔥</div>
+        <h2>Session erstellen</h2>
+        <p>Starte eine neue Musik-Session und lade Freunde ein.</p>
+        <form id="createForm" autocomplete="off">
+          <div class="form-group">
+            <label for="createUsername">Dein Name</label>
+            <input type="text" id="createUsername" placeholder="z.B. DemonHost" maxlength="24" required />
+          </div>
+          <button type="submit" class="btn btn-primary btn-glow">
+            <span>Session starten</span>
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+          </button>
+        </form>
+      </div>
+
+      <!-- Divider -->
+      <div class="home-divider">
+        <span>oder</span>
+      </div>
+
+      <!-- Join Session -->
+      <div class="card card-join">
+        <div class="card-icon">👥</div>
+        <h2>Session beitreten</h2>
+        <p>Tritt einer bestehenden Session mit dem Code bei.</p>
+        <form id="joinForm" autocomplete="off">
+          <div class="form-group">
+            <label for="joinUsername">Dein Name</label>
+            <input type="text" id="joinUsername" placeholder="z.B. GuestDemon" maxlength="24" required />
+          </div>
+          <div class="form-group">
+            <label for="sessionCode">Session-Code</label>
+            <input type="text" id="sessionCode" placeholder="DMH-XXXXXX" maxlength="10"
+                   style="text-transform:uppercase;letter-spacing:2px" required />
+          </div>
+          <button type="submit" class="btn btn-secondary">
+            <span>Beitreten</span>
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+              <polyline points="10 17 15 12 10 7"></polyline>
+              <line x1="15" y1="12" x2="3" y2="12"></line>
+            </svg>
+          </button>
+        </form>
+      </div>
+    </main>
+
+    <!-- Features -->
+    <section class="features">
+      <div class="feature">
+        <div class="feature-icon">🎵</div>
+        <div>
+          <strong>Multi-Source</strong>
+          <span>Spotify, YouTube Music &amp; Lokale Dateien in einer Queue</span>
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔗</div>
+        <div>
+          <strong>Echtzeit-Sync</strong>
+          <span>Alle sehen dieselbe Queue und den Fortschritt</span>
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">👑</div>
+        <div>
+          <strong>Host-Kontrolle</strong>
+          <span>Queue bearbeiten, Session sperren, Gäste verwalten</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Error toast -->
+    <div id="homeError" class="toast toast-error" style="display:none"></div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
