@@ -18,6 +18,10 @@ window.DMHPlayer = (function () {
   let _isPlaying = false;
   let _progressInterval = null;
 
+  // Guard: prevents a single track-end from firing multiple times.
+  // Resets to false each time play() is called for a new track.
+  let _endedFired = false;
+
   // Callbacks set by session.js
   let _onProgress = null;
   let _onEnded = null;
@@ -43,8 +47,6 @@ window.DMHPlayer = (function () {
     _spotifyToken = token;
     if (_isHost && !_spotifyPlayer) {
       _initSpotify();
-    } else if (_spotifyPlayer && token) {
-      // Re-connect isn't straightforward; the SDK auto-renews if we call getOAuthToken
     }
   }
 
@@ -54,23 +56,16 @@ window.DMHPlayer = (function () {
       _createSpotifyPlayer();
       return;
     }
-    // Load SDK
     const script = document.createElement('script');
     script.src = 'https://sdk.scdn.co/spotify-player.js';
     document.body.appendChild(script);
-
-    window.onSpotifyWebPlaybackSDKReady = () => {
-      _createSpotifyPlayer();
-    };
+    window.onSpotifyWebPlaybackSDKReady = () => _createSpotifyPlayer();
   }
 
   function _createSpotifyPlayer() {
     _spotifyPlayer = new window.Spotify.Player({
       name: 'DemonicMusicHost',
-      getOAuthToken: (cb) => {
-        // Token may have been refreshed; grab latest
-        cb(_spotifyToken);
-      },
+      getOAuthToken: (cb) => cb(_spotifyToken),
       volume: 0.8
     });
 
@@ -86,7 +81,9 @@ window.DMHPlayer = (function () {
 
     _spotifyPlayer.addListener('player_state_changed', (state) => {
       if (!state) return;
-      // Detect natural track end
+      // Only handle end events when we are actually playing Spotify.
+      // This prevents the pause() call in _stopCurrent() from re-triggering ended.
+      if (_currentSource !== 'spotify') return;
       if (state.paused && state.position === 0 && state.track_window?.previous_tracks?.length > 0) {
         _handleEnded();
       }
@@ -112,14 +109,10 @@ window.DMHPlayer = (function () {
       return;
     }
 
-    // Load YT IFrame API
     const tag = document.createElement('script');
     tag.src = 'https://www.youtube.com/iframe_api';
     document.head.appendChild(tag);
-
-    window.onYouTubeIframeAPIReady = () => {
-      _createYTPlayer();
-    };
+    window.onYouTubeIframeAPIReady = () => _createYTPlayer();
   }
 
   function _createYTPlayer() {
@@ -131,7 +124,7 @@ window.DMHPlayer = (function () {
       width: '1',
       height: '1',
       playerVars: {
-        autoplay: 0,
+        autoplay: 1,      // allow autoplay for smooth track transitions
         controls: 0,
         disablekb: 1,
         fs: 0,
@@ -146,11 +139,21 @@ window.DMHPlayer = (function () {
           console.log('[Player] YouTube ready');
         },
         onStateChange: (event) => {
-          if (event.data === window.YT.PlayerState.ENDED) {
+          const S = window.YT.PlayerState;
+          // Only handle ended/error when we are actually playing YouTube.
+          if (_currentSource !== 'youtube') return;
+
+          if (event.data === S.ENDED) {
             _handleEnded();
+          }
+          // If the video was cued (e.g. after loadVideoById in some browsers),
+          // force playback to start.
+          if (event.data === S.CUED) {
+            _ytPlayer.playVideo();
           }
         },
         onError: (event) => {
+          if (_currentSource !== 'youtube') return;
           console.error('[Player] YouTube error:', event.data);
           window.DMHToast && window.DMHToast.error('YouTube-Fehler: Track übersprungen.');
           _handleEnded();
@@ -163,9 +166,11 @@ window.DMHPlayer = (function () {
   function _initLocalAudio() {
     _localAudio = new Audio();
     _localAudio.preload = 'metadata';
-    _localAudio.addEventListener('ended', _handleEnded);
-    _localAudio.addEventListener('error', (e) => {
-      console.error('[Player] Local audio error:', e);
+    _localAudio.addEventListener('ended', () => {
+      if (_currentSource === 'local') _handleEnded();
+    });
+    _localAudio.addEventListener('error', () => {
+      if (_currentSource !== 'local') return;
       window.DMHToast && window.DMHToast.error('Audiodatei konnte nicht abgespielt werden.');
     });
   }
@@ -174,11 +179,16 @@ window.DMHPlayer = (function () {
   async function play(track, positionMs = 0) {
     if (!_isHost) return;
 
-    // Stop whatever is currently playing
+    // Reset the ended guard so the new track can fire its own ended event.
+    _endedFired = false;
+
+    // Gracefully stop whatever is currently active.
+    // IMPORTANT: _currentSource must still point to the OLD source here so
+    // _stopCurrent() stops the right player. We update it afterwards.
     await _stopCurrent();
 
     _currentTrack = track;
-    _currentSource = track.source;
+    _currentSource = track.source; // now update source AFTER stopping old one
     _isPlaying = true;
 
     switch (track.source) {
@@ -202,45 +212,52 @@ window.DMHPlayer = (function () {
       return;
     }
     try {
-      await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${_spotifyDeviceId}`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${_spotifyToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          uris: [track.spotifyUri],
-          position_ms: positionMs
-        })
-      });
+      const res = await fetch(
+        `https://api.spotify.com/v1/me/player/play?device_id=${_spotifyDeviceId}`,
+        {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${_spotifyToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ uris: [track.spotifyUri], position_ms: positionMs })
+        }
+      );
+      if (!res.ok && res.status !== 204) {
+        const err = await res.json().catch(() => ({}));
+        console.error('[Player] Spotify play error:', err);
+      }
     } catch (err) {
       console.error('[Player] Spotify play error:', err);
     }
   }
 
   function _playYouTube(track, positionMs) {
+    const doLoad = () => {
+      // loadVideoById auto-plays; CUED handler will call playVideo() as backup.
+      _ytPlayer.loadVideoById({
+        videoId: track.youtubeId,
+        startSeconds: positionMs / 1000
+      });
+    };
+
     if (!_ytReady || !_ytPlayer) {
-      // Queue it for when YT is ready
       const check = setInterval(() => {
         if (_ytReady && _ytPlayer) {
           clearInterval(check);
-          _ytPlayer.loadVideoById({ videoId: track.youtubeId, startSeconds: positionMs / 1000 });
-          _ytPlayer.playVideo();
+          doLoad();
         }
-      }, 200);
+      }, 150);
       return;
     }
-    _ytPlayer.loadVideoById({ videoId: track.youtubeId, startSeconds: positionMs / 1000 });
-    _ytPlayer.playVideo();
+    doLoad();
   }
 
   function _playLocal(track, positionMs) {
     _localAudio.src = `/upload/stream/${encodeURIComponent(track.localFileId)}`;
     _localAudio.load();
     _localAudio.currentTime = positionMs / 1000;
-    _localAudio.play().catch(err => {
-      console.error('[Player] Local play error:', err);
-    });
+    _localAudio.play().catch(err => console.error('[Player] Local play error:', err));
   }
 
   // ── Pause ─────────────────────────────────────────────────────────────────
@@ -248,7 +265,6 @@ window.DMHPlayer = (function () {
     if (!_isHost) return;
     _isPlaying = false;
     _stopProgressBroadcast();
-
     switch (_currentSource) {
       case 'spotify':
         if (_spotifyPlayer) await _spotifyPlayer.pause();
@@ -266,7 +282,6 @@ window.DMHPlayer = (function () {
   async function resume() {
     if (!_isHost) return;
     _isPlaying = true;
-
     switch (_currentSource) {
       case 'spotify':
         if (_spotifyPlayer) await _spotifyPlayer.resume();
@@ -278,14 +293,12 @@ window.DMHPlayer = (function () {
         _localAudio.play().catch(console.error);
         break;
     }
-
     _startProgressBroadcast();
   }
 
   // ── Seek ──────────────────────────────────────────────────────────────────
   async function seek(positionMs) {
     if (!_isHost) return;
-
     switch (_currentSource) {
       case 'spotify':
         if (_spotifyPlayer) await _spotifyPlayer.seek(positionMs);
@@ -299,24 +312,30 @@ window.DMHPlayer = (function () {
     }
   }
 
-  // ── Stop ──────────────────────────────────────────────────────────────────
+  // ── Stop current source ───────────────────────────────────────────────────
   async function _stopCurrent() {
     _stopProgressBroadcast();
     _isPlaying = false;
 
-    if (_currentSource === 'spotify' && _spotifyPlayer) {
+    // Temporarily null out source so event handlers in players don't fire
+    // _handleEnded while we're in the middle of switching tracks.
+    const stoppingSource = _currentSource;
+    _currentSource = null;
+
+    if (stoppingSource === 'spotify' && _spotifyPlayer) {
       try { await _spotifyPlayer.pause(); } catch (_) {}
     }
-    if (_currentSource === 'youtube' && _ytPlayer && _ytReady) {
-      try { _ytPlayer.stopVideo(); } catch (_) {}
+    if (stoppingSource === 'youtube' && _ytPlayer && _ytReady) {
+      try { _ytPlayer.pauseVideo(); } catch (_) {}
+      // Use pauseVideo instead of stopVideo to avoid triggering extra state events
     }
-    if (_currentSource === 'local') {
+    if (stoppingSource === 'local') {
       _localAudio.pause();
       _localAudio.src = '';
     }
   }
 
-  // ── Progress ──────────────────────────────────────────────────────────────
+  // ── Progress broadcast ────────────────────────────────────────────────────
   function _startProgressBroadcast() {
     _stopProgressBroadcast();
     if (!_isHost) return;
@@ -354,14 +373,20 @@ window.DMHPlayer = (function () {
     return null;
   }
 
+  // ── Handle track end ──────────────────────────────────────────────────────
+  // The _endedFired flag ensures this only fires once per track, even if
+  // multiple player events arrive (e.g. Spotify fires player_state_changed
+  // multiple times, or _stopCurrent() triggers a state event).
   function _handleEnded() {
+    if (_endedFired) return;
+    _endedFired = true;
     _isPlaying = false;
     _stopProgressBroadcast();
     _onEnded && _onEnded();
   }
 
-  // ── Volume (local + YouTube) ──────────────────────────────────────────────
-  function setVolume(vol) { // 0–1
+  // ── Volume ────────────────────────────────────────────────────────────────
+  function setVolume(vol) {
     if (_localAudio) _localAudio.volume = vol;
     if (_ytPlayer && _ytReady) _ytPlayer.setVolume(vol * 100);
     if (_spotifyPlayer) _spotifyPlayer.setVolume(vol).catch(() => {});
