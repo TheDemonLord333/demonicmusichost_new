@@ -4,13 +4,32 @@
 
   // ── URL params ────────────────────────────────────────────────────────────
   const params = new URLSearchParams(window.location.search);
-  const MODE_CREATE = params.get('create') === '1';
-  const MODE_JOIN   = params.get('join');
-  const USERNAME    = params.get('username') || 'Anonymous';
-  const SPOTIFY_TOKEN   = params.get('spotify_token');
-  const SPOTIFY_REFRESH = params.get('spotify_refresh');
-  const SPOTIFY_EXPIRES = parseInt(params.get('spotify_expires') || '0', 10);
+  const MODE_CREATE  = params.get('create') === '1';
+  const MODE_JOIN    = params.get('join');
+  const MODE_REJOIN  = params.get('sessionId'); // back from Spotify OAuth inside a session
+  const USERNAME     = params.get('username')
+    || sessionStorage.getItem('dmh_username')
+    || 'Anonymous';
+  const SPOTIFY_TOKEN   = params.get('spotify_token')
+    || (isSpotifyValid() ? sessionStorage.getItem('dmh_spotify_token') : null);
+  const SPOTIFY_REFRESH = params.get('spotify_refresh')
+    || sessionStorage.getItem('dmh_spotify_refresh') || null;
+  const SPOTIFY_EXPIRES = parseInt(params.get('spotify_expires')
+    || sessionStorage.getItem('dmh_spotify_expires') || '0', 10);
   const SPOTIFY_ERROR   = params.get('spotify_error');
+
+  // Persist new tokens to sessionStorage if they came via URL
+  if (params.get('spotify_token')) {
+    sessionStorage.setItem('dmh_spotify_token',   params.get('spotify_token'));
+    sessionStorage.setItem('dmh_spotify_refresh', params.get('spotify_refresh') || '');
+    sessionStorage.setItem('dmh_spotify_expires', params.get('spotify_expires') || '0');
+  }
+
+  function isSpotifyValid() {
+    const token   = sessionStorage.getItem('dmh_spotify_token');
+    const expires = parseInt(sessionStorage.getItem('dmh_spotify_expires') || '0', 10);
+    return !!token && (expires === 0 || expires > Date.now() + 60000);
+  }
 
   // Clean URL (remove tokens from history)
   window.history.replaceState({}, '', window.location.pathname);
@@ -92,8 +111,10 @@
       socket.emit('create_session', { username: USERNAME });
     } else if (MODE_JOIN) {
       socket.emit('join_session', { sessionId: MODE_JOIN, username: USERNAME });
+    } else if (MODE_REJOIN) {
+      // Returning from Spotify OAuth — rejoin the existing session
+      socket.emit('join_session', { sessionId: MODE_REJOIN, username: USERNAME });
     } else {
-      // Fallback: redirect home
       window.location.href = '/';
     }
   });
@@ -140,7 +161,7 @@
   });
 
   socket.on('playback_updated', ({ currentTrackIndex: idx, isPlaying: playing, position, timestamp }) => {
-    const prevIdx = currentTrackIndex;
+    const prevIdx = currentTrackIndex;  // capture BEFORE overwriting
     currentTrackIndex = idx;
     isPlaying = playing;
 
@@ -151,6 +172,13 @@
 
     if (isHost) {
       _updatePlayPauseBtn();
+      // Trigger actual audio playback — use prevIdx to detect track change
+      if (prevIdx !== idx && idx >= 0 && queue[idx]) {
+        DMHPlayer.play(queue[idx], position || 0);
+      } else if (prevIdx === idx && idx >= 0) {
+        if (playing) DMHPlayer.resume();
+        else DMHPlayer.pause();
+      }
     } else {
       // Guest: adjust position accounting for network delay
       const lag = Date.now() - (timestamp || Date.now());
@@ -314,18 +342,6 @@
       socket.emit('playback_control', { action: 'next' });
     });
 
-    // Handle playback_updated for host too
-    socket.on('playback_updated', ({ currentTrackIndex: idx, isPlaying: playing, position }) => {
-      if (!isHost) return;
-      if (idx !== currentTrackIndex && idx >= 0 && queue[idx]) {
-        DMHPlayer.play(queue[idx], position || 0);
-      } else if (playing && !isPlaying) {
-        DMHPlayer.resume();
-      } else if (!playing && isPlaying) {
-        DMHPlayer.pause();
-      }
-    });
-
     // Spotify token refresh
     if (spotifyToken) {
       _scheduleSpotifyRefresh();
@@ -430,6 +446,8 @@
       if (data.access_token) {
         spotifyToken = data.access_token;
         spotifyExpires = Date.now() + data.expires_in * 1000;
+        sessionStorage.setItem('dmh_spotify_token', spotifyToken);
+        sessionStorage.setItem('dmh_spotify_expires', String(spotifyExpires));
         DMHPlayer.setSpotifyToken(spotifyToken);
         DMHSearch.setSpotifyToken(spotifyToken);
         socket.emit('spotify_token_update', { token: spotifyToken });

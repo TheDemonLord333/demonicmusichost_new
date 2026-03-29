@@ -10,8 +10,9 @@ module.exports = function (sessions) {
   const REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:3000/auth/spotify/callback';
 
   // Redirect user to Spotify OAuth
+  // Query params: sessionId (in-session connect) OR from=home (pre-session connect)
   router.get('/spotify', (req, res) => {
-    const { sessionId } = req.query;
+    const { sessionId, from } = req.query;
     if (!CLIENT_ID) {
       return res.status(500).send('Spotify Client ID not configured.');
     }
@@ -23,22 +24,29 @@ module.exports = function (sessions) {
       'user-read-playback-state'
     ].join(' ');
 
+    // state encodes where to redirect after auth:
+    // 'home'       → back to home page with token
+    // 'DMH-XXXXX'  → back to session page with token
+    const state = sessionId || (from === 'home' ? 'home' : 'home');
+
     const url = 'https://accounts.spotify.com/authorize?' + querystring.stringify({
       client_id: CLIENT_ID,
       response_type: 'code',
       redirect_uri: REDIRECT_URI,
       scope,
-      state: sessionId || ''
+      state
     });
     res.redirect(url);
   });
 
   // Spotify OAuth callback
   router.get('/spotify/callback', async (req, res) => {
-    const { code, state: sessionId, error } = req.query;
+    const { code, state, error } = req.query;
+    const isHomeFlow = !state || state === 'home';
 
     if (error || !code) {
-      return res.redirect(`/session.html?sessionId=${sessionId}&spotify_error=access_denied`);
+      if (isHomeFlow) return res.redirect('/?spotify_error=access_denied');
+      return res.redirect(`/session.html?sessionId=${state}&spotify_error=access_denied`);
     }
 
     try {
@@ -58,16 +66,24 @@ module.exports = function (sessions) {
       );
 
       const { access_token, refresh_token, expires_in } = tokenRes.data;
-      const params = new URLSearchParams({
-        sessionId: sessionId || '',
+      const tokenParams = new URLSearchParams({
         spotify_token: access_token,
         spotify_refresh: refresh_token,
         spotify_expires: String(Date.now() + expires_in * 1000)
       });
-      res.redirect(`/session.html?${params.toString()}`);
+
+      if (isHomeFlow) {
+        // Redirect back to home page with token — app.js stores it in sessionStorage
+        res.redirect(`/?${tokenParams.toString()}`);
+      } else {
+        // Redirect back to session page so the host can reconnect
+        tokenParams.set('sessionId', state);
+        res.redirect(`/session.html?${tokenParams.toString()}`);
+      }
     } catch (err) {
       console.error('[Auth] Spotify token error:', err.response?.data || err.message);
-      res.redirect(`/session.html?sessionId=${sessionId}&spotify_error=token_failed`);
+      if (isHomeFlow) return res.redirect('/?spotify_error=token_failed');
+      res.redirect(`/session.html?sessionId=${state}&spotify_error=token_failed`);
     }
   });
 
