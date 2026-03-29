@@ -222,6 +222,11 @@
     _renderParticipants(participants);
   });
 
+  socket.on('kicked', ({ by }) => {
+    toast(`Du wurdest von ${by} aus der Session entfernt.`, 'error');
+    setTimeout(() => { window.location.href = '/'; }, 2500);
+  });
+
   socket.on('host_transferred', ({ newHostUsername, participants }) => {
     // Am I the new host?
     const me = participants.find(p => p.socketId === socket.id);
@@ -598,7 +603,8 @@
   function _renderParticipants(participants) {
     if (participantCount) participantCount.textContent = participants.length;
 
-    const buildList = (el) => {
+    // Sidebar list — no kick buttons
+    const buildSidebar = (el) => {
       if (!el) return;
       el.innerHTML = '';
       participants.forEach(p => {
@@ -614,8 +620,48 @@
       });
     };
 
-    buildList(participantList);
-    buildList(participantsModalList);
+    // Modal list — kick buttons for host on non-host participants
+    const buildModal = (el) => {
+      if (!el) return;
+      el.innerHTML = '';
+      participants.forEach(p => {
+        const li = document.createElement('li');
+        li.className = 'participant-item';
+        const initial = (p.username || '?')[0].toUpperCase();
+        const isSelf = p.socketId === socket.id;
+        const canKick = isHost && !p.isHost && !isSelf;
+
+        li.innerHTML = `
+          <div class="participant-avatar">${_escHtml(initial)}</div>
+          <span class="participant-name">${_escHtml(p.username)}${isSelf ? ' <span class="participant-you">(Du)</span>' : ''}</span>
+          ${p.isHost ? '<span class="participant-crown" title="Host">👑</span>' : ''}
+          ${canKick ? `
+            <button class="btn-kick" data-socketid="${_escAttr(p.socketId)}" title="${_escAttr(p.username)} rauswerfen">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+            </button>` : ''}
+        `;
+
+        if (canKick) {
+          li.querySelector('.btn-kick').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const targetId = e.currentTarget.dataset.socketid;
+            const targetName = p.username;
+            if (confirm(`${targetName} wirklich aus der Session entfernen?`)) {
+              socket.emit('kick_participant', { targetSocketId: targetId });
+            }
+          });
+        }
+
+        el.appendChild(li);
+      });
+    };
+
+    buildSidebar(participantList);
+    buildModal(participantsModalList);
   }
 
   // ── Add Song button ───────────────────────────────────────────────────────

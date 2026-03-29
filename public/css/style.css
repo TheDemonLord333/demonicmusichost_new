@@ -805,6 +805,33 @@ a:hover { text-decoration: underline; }
   font-size: 0.75rem;
   color: #f0c040;
 }
+.participant-you {
+  font-size: 0.7rem;
+  color: var(--text-4);
+  font-weight: 400;
+}
+.btn-kick {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 5px 7px;
+  cursor: pointer;
+  color: var(--text-4);
+  margin-left: auto;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+.btn-kick:hover {
+  color: var(--accent-bright);
+  background: rgba(192, 0, 10, 0.15);
+  border-color: var(--accent-dim);
+}
+.participant-list-modal .participant-item {
+  padding: 0.6rem 1rem;
+}
 
 /* ═══════════════════════════════════════════════════════════
    MODAL

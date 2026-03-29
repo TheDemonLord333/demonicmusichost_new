@@ -369,7 +369,30 @@ io.on('connection', (socket) => {
     console.log('[DMH] Client disconnected:', socket.id);
   });
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
+  // ── Kick Participant (host only) ────────────────────────────────────────────
+  socket.on('kick_participant', ({ targetSocketId }) => {
+    const sess = getSession(socket.id);
+    if (!sess || !isHost(socket.id, sess)) return;
+    if (targetSocketId === socket.id) return; // can't kick yourself
+
+    const target = sess.participants.get(targetSocketId);
+    if (!target) return;
+
+    // Notify the kicked user first
+    io.to(targetSocketId).emit('kicked', { by: sess.participants.get(socket.id)?.username || 'Host' });
+
+    // Remove from session
+    sess.participants.delete(targetSocketId);
+    socketToSession.delete(targetSocketId);
+
+    io.to(sess.id).emit('participant_left', {
+      username: target.username,
+      participants: Array.from(sess.participants.values())
+    });
+    console.log(`[DMH] ${target.username} kicked from session ${sess.id}`);
+  });
+
+  // ── Kick Participant (host only) ────────────────────────────────────────────
   function getSession(socketId) {
     const sessId = socketToSession.get(socketId);
     return sessId ? sessions.get(sessId) : null;
