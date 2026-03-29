@@ -31,6 +31,17 @@
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
         </svg>
       </button>
+      <button id="showQrBtn" class="btn-icon-only" title="QR-Code anzeigen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/>
+          <rect x="5" y="5" width="3" height="3" fill="currentColor" stroke="none"/>
+          <rect x="16" y="5" width="3" height="3" fill="currentColor" stroke="none"/>
+          <rect x="5" y="16" width="3" height="3" fill="currentColor" stroke="none"/>
+          <path d="M14 14h3v3h-3z" fill="currentColor" stroke="none"/>
+          <path d="M17 14h4M17 17v4M21 14v3"/>
+        </svg>
+      </button>
     </div>
     <div class="header-right">
       <div id="participantsBadge" class="participants-badge" title="Teilnehmer">
@@ -261,6 +272,38 @@
         </button>
       </div>
       <ul id="participantsModalList" class="participant-list participant-list-modal"></ul>
+    </div>
+  </div>
+
+  <!-- ── QR-Code Modal ──────────────────────────────────────────────────────── -->
+  <div id="qrModal" class="modal" style="display:none">
+    <div class="modal-backdrop" id="qrModalBackdrop"></div>
+    <div class="modal-content modal-sm">
+      <div class="modal-header">
+        <h2>Session beitreten</h2>
+        <button id="qrModalClose" class="btn-icon-only">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="qr-modal-body">
+        <div id="qrCodeWrap" class="qr-code-wrap">
+          <div class="qr-spinner"></div>
+        </div>
+        <p class="qr-hint">Scan mit dem Handy um beizutreten</p>
+        <div class="qr-session-code" id="qrSessionCodeDisplay"></div>
+        <div class="qr-url-row">
+          <span id="qrJoinUrl" class="qr-url-text"></span>
+          <button id="qrCopyUrlBtn" class="btn-icon-only" title="URL kopieren">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 

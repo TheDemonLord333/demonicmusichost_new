@@ -194,10 +194,23 @@
     });
   }
 
-  // Auto-fill session code from URL hash
+  // Auto-fill session code from URL ?code= param (QR scan) or hash
+  const codeFromUrl = urlParams.get('code');
   const hash = window.location.hash.replace('#', '');
-  if (hash && document.getElementById('sessionCode')) {
-    document.getElementById('sessionCode').value = hash;
+  const prefillCode = codeFromUrl || hash;
+  if (prefillCode) {
+    const sc = document.getElementById('sessionCode');
+    if (sc) sc.value = prefillCode.toUpperCase();
+    // Clean ?code= from URL so it doesn't linger
+    if (codeFromUrl) window.history.replaceState({}, '', '/');
+    // Scroll to join form
+    const joinCard = document.querySelector('.card-join');
+    if (joinCard) joinCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Focus the username field
+    setTimeout(() => {
+      const ju = document.getElementById('joinUsername');
+      if (ju && !ju.value) ju.focus();
+    }, 300);
   }
 
   // Pre-fill username from last session

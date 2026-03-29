@@ -734,6 +734,54 @@
     if (participantsModal) participantsModal.style.display = 'none';
   });
 
+  // ── QR-Code modal ─────────────────────────────────────────────────────────
+  const showQrBtn       = document.getElementById('showQrBtn');
+  const qrModal         = document.getElementById('qrModal');
+  const qrModalClose    = document.getElementById('qrModalClose');
+  const qrModalBackdrop = document.getElementById('qrModalBackdrop');
+  const qrCodeWrap      = document.getElementById('qrCodeWrap');
+  const qrJoinUrl       = document.getElementById('qrJoinUrl');
+  const qrCopyUrlBtn    = document.getElementById('qrCopyUrlBtn');
+  const qrSessionCodeDisplay = document.getElementById('qrSessionCodeDisplay');
+
+  let qrLoaded = false;
+
+  function openQrModal() {
+    if (!sessionId) return;
+    if (qrModal) qrModal.style.display = 'flex';
+    if (qrSessionCodeDisplay) qrSessionCodeDisplay.textContent = sessionId;
+    if (!qrLoaded) _loadQr();
+  }
+
+  async function _loadQr() {
+    if (!qrCodeWrap) return;
+    qrCodeWrap.innerHTML = '<div class="qr-spinner"></div>';
+    try {
+      const res = await fetch(`/api/session/${encodeURIComponent(sessionId)}/qr`);
+      const data = await res.json();
+      if (!res.ok || !data.dataUrl) throw new Error(data.error || 'QR error');
+
+      qrCodeWrap.innerHTML = `<img src="${data.dataUrl}" alt="QR Code" class="qr-image" />`;
+      if (qrJoinUrl) qrJoinUrl.textContent = data.joinUrl;
+      qrLoaded = true;
+    } catch (err) {
+      qrCodeWrap.innerHTML = '<p class="qr-error">QR konnte nicht geladen werden.</p>';
+    }
+  }
+
+  showQrBtn && showQrBtn.addEventListener('click', openQrModal);
+  qrModalClose    && qrModalClose.addEventListener('click',    () => { if (qrModal) qrModal.style.display = 'none'; });
+  qrModalBackdrop && qrModalBackdrop.addEventListener('click', () => { if (qrModal) qrModal.style.display = 'none'; });
+
+  qrCopyUrlBtn && qrCopyUrlBtn.addEventListener('click', () => {
+    const url = qrJoinUrl?.textContent;
+    if (!url) return;
+    navigator.clipboard.writeText(url).then(() => toast('Link kopiert!', 'success')).catch(() => {});
+  });
+
+  // Re-generate QR if session changes (shouldn't happen, but safe)
+  socket.on('session_created', () => { qrLoaded = false; });
+
   // ── Init Search ───────────────────────────────────────────────────────────
   // Wait until we have sessionId
   const searchInitInterval = setInterval(() => {
