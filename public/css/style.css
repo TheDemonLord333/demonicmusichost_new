@@ -746,25 +746,30 @@ a:hover { text-decoration: underline; }
   transition: all var(--transition);
 }
 .btn-upload:hover { border-color: var(--accent-dim); color: var(--text-1); }
-.upload-progress {
+.upload-progress-wrap {
   margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.upload-progress-track {
   background: var(--bg-3);
   border-radius: 4px;
   height: 6px;
   overflow: hidden;
   position: relative;
+  width: 100%;
 }
 .upload-progress-bar {
   height: 100%;
   background: linear-gradient(90deg, var(--accent-dim), var(--accent-bright));
   width: 0%;
-  transition: width 0.3s ease;
+  transition: width 0.2s ease;
+  border-radius: 4px;
 }
 #uploadProgressText {
-  display: block;
   font-size: 0.75rem;
   color: var(--text-3);
-  margin-top: 0.3rem;
 }
 
 /* ── Participants ─────────────────────────────────────────── */

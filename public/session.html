@@ -186,9 +186,11 @@
           </svg>
           Lokale Datei hochladen
         </label>
-        <input type="file" id="localFileInput" accept="audio/*,.mp3,.mp4,.m4a,.wav,.ogg,.flac,.aac" style="display:none" />
-        <div id="uploadProgress" class="upload-progress" style="display:none">
-          <div class="upload-progress-bar" id="uploadProgressBar"></div>
+        <input type="file" id="localFileInput" accept="audio/*,.mp3,.mp4,.m4a,.wav,.ogg,.flac,.aac,.opus,.weba,.webm" style="display:none" />
+        <div id="uploadProgress" class="upload-progress-wrap" style="display:none">
+          <div class="upload-progress-track">
+            <div class="upload-progress-bar" id="uploadProgressBar"></div>
+          </div>
           <span id="uploadProgressText">Wird hochgeladen…</span>
         </div>
       </div>

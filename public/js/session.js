@@ -697,8 +697,15 @@
       });
 
       xhr.addEventListener('load', () => {
-        if (xhr.status === 200) {
-          const data = JSON.parse(xhr.responseText);
+        if (uploadProgress) uploadProgress.style.display = 'none';
+        localFileInput.value = '';
+
+        if (xhr.status === 200 || xhr.status === 201) {
+          let data;
+          try { data = JSON.parse(xhr.responseText); } catch (_) {
+            toast('Upload-Antwort ungültig', 'error');
+            return;
+          }
           const track = {
             source: 'local',
             title: audioMeta.title || _stripExt(file.name),
@@ -713,16 +720,19 @@
           socket.emit('queue_add', { track });
           toast(`"${track.title}" hinzugefügt`, 'success');
         } else {
-          toast('Upload fehlgeschlagen', 'error');
+          let msg = 'Upload fehlgeschlagen';
+          try {
+            const err = JSON.parse(xhr.responseText);
+            if (err.error) msg = err.error;
+          } catch (_) {}
+          toast(msg, 'error');
         }
-        if (uploadProgress) uploadProgress.style.display = 'none';
-        localFileInput.value = '';
       });
 
       xhr.addEventListener('error', () => {
-        toast('Upload-Fehler', 'error');
         if (uploadProgress) uploadProgress.style.display = 'none';
         localFileInput.value = '';
+        toast('Netzwerkfehler beim Upload', 'error');
       });
 
       xhr.send(formData);
