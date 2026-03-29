@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DMH — Session</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body class="session-page">
+
+  <!-- Hidden YouTube IFrame player (audio only) -->
+  <div id="ytPlayerContainer" style="position:absolute;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;pointer-events:none;"></div>
+
+  <!-- Toast notifications -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- ── Header ─────────────────────────────────────────────────────────────── -->
+  <header class="session-header">
+    <a href="/" class="header-logo">
+      <span class="logo-dmh">DMH</span>
+      <span class="logo-full">DemonicMusicHost</span>
+    </a>
+    <div class="header-session-info">
+      <span class="session-code-label">Session:</span>
+      <span id="headerSessionCode" class="session-code">—</span>
+      <button id="copyCodeBtn" class="btn-icon-only" title="Code kopieren">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+      </button>
+    </div>
+    <div class="header-right">
+      <div id="participantsBadge" class="participants-badge" title="Teilnehmer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+        <span id="participantCount">1</span>
+      </div>
+      <div id="hostBadge" class="host-badge" style="display:none">HOST</div>
+      <div id="spotifyStatus" class="spotify-status" style="display:none">
+        <svg viewBox="0 0 24 24" fill="#1DB954" width="16" height="16">
+          <circle cx="12" cy="12" r="12" fill="#1DB954"/>
+          <path d="M17.9 10.9C14.7 9 9.35 8.8 6.3 9.75c-.5.15-1-.15-1.15-.6-.15-.5.15-1 .6-1.15 3.55-1.05 9.4-.85 13.1 1.35.45.25.6.85.35 1.3-.25.35-.85.5-1.3.25zm-.1 2.8c-.25.35-.7.5-1.05.25-2.7-1.65-6.8-2.15-9.95-1.15-.4.1-.85-.1-.95-.5-.1-.4.1-.85.5-.95 3.65-1.1 8.15-.55 11.25 1.35.3.15.45.65.2 1zm-1.2 2.75c-.2.3-.55.4-.85.2-2.35-1.45-5.3-1.75-8.8-.95-.35.1-.65-.15-.75-.45-.1-.35.15-.65.45-.75 3.8-.85 7.1-.5 9.7 1.1.35.15.4.55.25.85z" fill="white"/>
+        </svg>
+        <span id="spotifyStatusText">Spotify</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main Layout ─────────────────────────────────────────────────────────── -->
+  <div class="session-layout">
+
+    <!-- ── Left: Now Playing + Controls ───────────────────────────────────────── -->
+    <aside class="panel panel-player">
+      <div class="now-playing">
+        <div class="np-thumbnail-wrap">
+          <img id="npThumbnail" class="np-thumbnail" src="/img/default-cover.svg" alt="Cover" />
+          <div class="np-source-badge" id="npSourceBadge" style="display:none"></div>
+        </div>
+        <div class="np-meta">
+          <div id="npTitle" class="np-title">Kein Song</div>
+          <div id="npArtist" class="np-artist">—</div>
+          <div id="npAlbum" class="np-album"></div>
+          <div id="npAddedBy" class="np-added-by"></div>
+        </div>
+
+        <!-- Progress bar -->
+        <div class="progress-area">
+          <div class="progress-bar-wrap" id="progressBarWrap">
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" id="progressFill"></div>
+              <div class="progress-bar-thumb" id="progressThumb"></div>
+            </div>
+          </div>
+          <div class="progress-times">
+            <span id="progressCurrent">0:00</span>
+            <span id="progressTotal">0:00</span>
+          </div>
+        </div>
+
+        <!-- Playback controls (host only) -->
+        <div class="playback-controls" id="playbackControls" style="display:none">
+          <button id="btnPrev" class="ctrl-btn" title="Vorheriger Track">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+              <polygon points="19 20 9 12 19 4 19 20"></polygon>
+              <line x1="5" y1="19" x2="5" y2="5"></line>
+            </svg>
+          </button>
+          <button id="btnPlayPause" class="ctrl-btn ctrl-btn-main" title="Play/Pause">
+            <svg id="iconPlay" viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <svg id="iconPause" viewBox="0 0 24 24" fill="currentColor" width="28" height="28" style="display:none">
+              <rect x="6" y="4" width="4" height="16"></rect>
+              <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
+          </button>
+          <button id="btnNext" class="ctrl-btn" title="Nächster Track">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+              <polygon points="5 4 15 12 5 20 5 4"></polygon>
+              <line x1="19" y1="5" x2="19" y2="19"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Guest view: readonly controls -->
+        <div class="guest-controls" id="guestControls" style="display:none">
+          <div class="guest-status" id="guestStatus">
+            <span>Gast — Host steuert Wiedergabe</span>
+          </div>
+        </div>
+
+        <!-- Spotify Connect button -->
+        <div id="spotifyConnect" class="spotify-connect-area" style="display:none">
+          <button id="btnSpotifyConnect" class="btn btn-spotify">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="#1DB954">
+              <circle cx="12" cy="12" r="12" fill="#1DB954"/>
+              <path d="M17.9 10.9C14.7 9 9.35 8.8 6.3 9.75c-.5.15-1-.15-1.15-.6-.15-.5.15-1 .6-1.15 3.55-1.05 9.4-.85 13.1 1.35.45.25.6.85.35 1.3-.25.35-.85.5-1.3.25zm-.1 2.8c-.25.35-.7.5-1.05.25-2.7-1.65-6.8-2.15-9.95-1.15-.4.1-.85-.1-.95-.5-.1-.4.1-.85.5-.95 3.65-1.1 8.15-.55 11.25 1.35.3.15.45.65.2 1zm-1.2 2.75c-.2.3-.55.4-.85.2-2.35-1.45-5.3-1.75-8.8-.95-.35.1-.65-.15-.75-.45-.1-.35.15-.65.45-.75 3.8-.85 7.1-.5 9.7 1.1.35.15.4.55.25.85z" fill="white"/>
+            </svg>
+            Spotify verbinden
+          </button>
+          <p class="spotify-hint">Für Spotify-Wiedergabe (Premium erforderlich)</p>
+        </div>
+      </div>
+
+      <!-- Host settings panel -->
+      <div id="hostSettings" class="host-settings" style="display:none">
+        <h3 class="panel-section-title">Session-Einstellungen</h3>
+        <label class="toggle-label">
+          <span>Beitritt erlauben</span>
+          <input type="checkbox" id="toggleAllowJoin" checked />
+          <span class="toggle-slider"></span>
+        </label>
+        <label class="toggle-label">
+          <span>Gäste dürfen hinzufügen</span>
+          <input type="checkbox" id="toggleAllowAdd" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </aside>
+
+    <!-- ── Center: Queue ───────────────────────────────────────────────────────── -->
+    <main class="panel panel-queue">
+      <div class="panel-header">
+        <h2 class="panel-title">Warteschlange</h2>
+        <button id="btnAddSong" class="btn btn-add-song">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Song hinzufügen
+        </button>
+      </div>
+
+      <div id="queueList" class="queue-list">
+        <div class="queue-empty" id="queueEmpty">
+          <div class="queue-empty-icon">🎵</div>
+          <p>Warteschlange ist leer.<br/>Füge Songs hinzu um zu beginnen.</p>
+        </div>
+      </div>
+
+      <!-- Local file upload (always visible) -->
+      <div class="local-upload-area" id="localUploadArea">
+        <label for="localFileInput" class="btn btn-upload">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <polyline points="16 16 12 12 8 16"></polyline>
+            <line x1="12" y1="12" x2="12" y2="21"></line>
+            <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path>
+          </svg>
+          Lokale Datei hochladen
+        </label>
+        <input type="file" id="localFileInput" accept="audio/*,.mp3,.mp4,.m4a,.wav,.ogg,.flac,.aac" style="display:none" />
+        <div id="uploadProgress" class="upload-progress" style="display:none">
+          <div class="upload-progress-bar" id="uploadProgressBar"></div>
+          <span id="uploadProgressText">Wird hochgeladen…</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- ── Right: Participants ─────────────────────────────────────────────────── -->
+    <aside class="panel panel-participants">
+      <h2 class="panel-title">Teilnehmer</h2>
+      <ul id="participantList" class="participant-list"></ul>
+    </aside>
+  </div>
+
+  <!-- ── Search Modal ────────────────────────────────────────────────────────── -->
+  <div id="searchModal" class="modal" style="display:none">
+    <div class="modal-backdrop" id="searchModalBackdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Song hinzufügen</h2>
+        <button id="searchModalClose" class="btn-icon-only">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Source tabs -->
+      <div class="search-tabs">
+        <button class="search-tab active" data-source="spotify">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="#1DB954">
+            <circle cx="12" cy="12" r="12" fill="#1DB954"/>
+            <path d="M17.9 10.9C14.7 9 9.35 8.8 6.3 9.75c-.5.15-1-.15-1.15-.6-.15-.5.15-1 .6-1.15 3.55-1.05 9.4-.85 13.1 1.35.45.25.6.85.35 1.3-.25.35-.85.5-1.3.25zm-.1 2.8c-.25.35-.7.5-1.05.25-2.7-1.65-6.8-2.15-9.95-1.15-.4.1-.85-.1-.95-.5-.1-.4.1-.85.5-.95 3.65-1.1 8.15-.55 11.25 1.35.3.15.45.65.2 1zm-1.2 2.75c-.2.3-.55.4-.85.2-2.35-1.45-5.3-1.75-8.8-.95-.35.1-.65-.15-.75-.45-.1-.35.15-.65.45-.75 3.8-.85 7.1-.5 9.7 1.1.35.15.4.55.25.85z" fill="white"/>
+          </svg>
+          Spotify
+        </button>
+        <button class="search-tab" data-source="youtube">
+          <svg viewBox="0 0 24 24" width="14" height="14">
+            <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6a3 3 0 0 0-2.1 2.1C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8z" fill="#FF0000"/>
+            <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="white"/>
+          </svg>
+          YouTube Music
+        </button>
+      </div>
+
+      <!-- Search bar -->
+      <div class="search-bar-wrap">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="searchInput" class="search-input" placeholder="Song oder Künstler suchen…" autocomplete="off" />
+        <div id="searchSpinner" class="search-spinner" style="display:none"></div>
+      </div>
+
+      <!-- Spotify no-token warning -->
+      <div id="spotifyNoToken" class="search-warning" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <span>Verbinde Spotify für die Suche. <a href="#" id="searchSpotifyConnectLink">Jetzt verbinden →</a></span>
+      </div>
+
+      <!-- Results -->
+      <div id="searchResults" class="search-results"></div>
+    </div>
+  </div>
+
+  <!-- ── Participants Modal ──────────────────────────────────────────────────── -->
+  <div id="participantsModal" class="modal" style="display:none">
+    <div class="modal-backdrop" id="participantsModalBackdrop"></div>
+    <div class="modal-content modal-sm">
+      <div class="modal-header">
+        <h2>Teilnehmer</h2>
+        <button id="participantsModalClose" class="btn-icon-only">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <ul id="participantsModalList" class="participant-list participant-list-modal"></ul>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/player.js"></script>
+  <script src="/js/search.js"></script>
+  <script src="/js/session.js"></script>
+</body>
+</html>
