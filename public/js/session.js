@@ -4,13 +4,32 @@
 
   // ── URL params ────────────────────────────────────────────────────────────
   const params = new URLSearchParams(window.location.search);
-  const MODE_CREATE = params.get('create') === '1';
-  const MODE_JOIN   = params.get('join');
-  const USERNAME    = params.get('username') || 'Anonymous';
-  const SPOTIFY_TOKEN   = params.get('spotify_token');
-  const SPOTIFY_REFRESH = params.get('spotify_refresh');
-  const SPOTIFY_EXPIRES = parseInt(params.get('spotify_expires') || '0', 10);
+  const MODE_CREATE  = params.get('create') === '1';
+  const MODE_JOIN    = params.get('join');
+  const MODE_REJOIN  = params.get('sessionId'); // back from Spotify OAuth inside a session
+  const USERNAME     = params.get('username')
+    || sessionStorage.getItem('dmh_username')
+    || 'Anonymous';
+  const SPOTIFY_TOKEN   = params.get('spotify_token')
+    || (isSpotifyValid() ? sessionStorage.getItem('dmh_spotify_token') : null);
+  const SPOTIFY_REFRESH = params.get('spotify_refresh')
+    || sessionStorage.getItem('dmh_spotify_refresh') || null;
+  const SPOTIFY_EXPIRES = parseInt(params.get('spotify_expires')
+    || sessionStorage.getItem('dmh_spotify_expires') || '0', 10);
   const SPOTIFY_ERROR   = params.get('spotify_error');
+
+  // Persist new tokens to sessionStorage if they came via URL
+  if (params.get('spotify_token')) {
+    sessionStorage.setItem('dmh_spotify_token',   params.get('spotify_token'));
+    sessionStorage.setItem('dmh_spotify_refresh', params.get('spotify_refresh') || '');
+    sessionStorage.setItem('dmh_spotify_expires', params.get('spotify_expires') || '0');
+  }
+
+  function isSpotifyValid() {
+    const token   = sessionStorage.getItem('dmh_spotify_token');
+    const expires = parseInt(sessionStorage.getItem('dmh_spotify_expires') || '0', 10);
+    return !!token && (expires === 0 || expires > Date.now() + 60000);
+  }
 
   // Clean URL (remove tokens from history)
   window.history.replaceState({}, '', window.location.pathname);
@@ -92,8 +111,10 @@
       socket.emit('create_session', { username: USERNAME });
     } else if (MODE_JOIN) {
       socket.emit('join_session', { sessionId: MODE_JOIN, username: USERNAME });
+    } else if (MODE_REJOIN) {
+      // Returning from Spotify OAuth — rejoin the existing session
+      socket.emit('join_session', { sessionId: MODE_REJOIN, username: USERNAME });
     } else {
-      // Fallback: redirect home
       window.location.href = '/';
     }
   });
@@ -140,7 +161,7 @@
   });
 
   socket.on('playback_updated', ({ currentTrackIndex: idx, isPlaying: playing, position, timestamp }) => {
-    const prevIdx = currentTrackIndex;
+    const prevIdx = currentTrackIndex;  // capture BEFORE overwriting
     currentTrackIndex = idx;
     isPlaying = playing;
 
@@ -151,6 +172,13 @@
 
     if (isHost) {
       _updatePlayPauseBtn();
+      // Trigger actual audio playback — use prevIdx to detect track change
+      if (prevIdx !== idx && idx >= 0 && queue[idx]) {
+        DMHPlayer.play(queue[idx], position || 0);
+      } else if (prevIdx === idx && idx >= 0) {
+        if (playing) DMHPlayer.resume();
+        else DMHPlayer.pause();
+      }
     } else {
       // Guest: adjust position accounting for network delay
       const lag = Date.now() - (timestamp || Date.now());
@@ -192,6 +220,11 @@
   socket.on('participant_left', ({ username, participants }) => {
     toast(`${username} hat die Session verlassen`, 'info');
     _renderParticipants(participants);
+  });
+
+  socket.on('kicked', ({ by }) => {
+    toast(`Du wurdest von ${by} aus der Session entfernt.`, 'error');
+    setTimeout(() => { window.location.href = '/'; }, 2500);
   });
 
   socket.on('host_transferred', ({ newHostUsername, participants }) => {
@@ -314,18 +347,6 @@
       socket.emit('playback_control', { action: 'next' });
     });
 
-    // Handle playback_updated for host too
-    socket.on('playback_updated', ({ currentTrackIndex: idx, isPlaying: playing, position }) => {
-      if (!isHost) return;
-      if (idx !== currentTrackIndex && idx >= 0 && queue[idx]) {
-        DMHPlayer.play(queue[idx], position || 0);
-      } else if (playing && !isPlaying) {
-        DMHPlayer.resume();
-      } else if (!playing && isPlaying) {
-        DMHPlayer.pause();
-      }
-    });
-
     // Spotify token refresh
     if (spotifyToken) {
       _scheduleSpotifyRefresh();
@@ -430,6 +451,8 @@
       if (data.access_token) {
         spotifyToken = data.access_token;
         spotifyExpires = Date.now() + data.expires_in * 1000;
+        sessionStorage.setItem('dmh_spotify_token', spotifyToken);
+        sessionStorage.setItem('dmh_spotify_expires', String(spotifyExpires));
         DMHPlayer.setSpotifyToken(spotifyToken);
         DMHSearch.setSpotifyToken(spotifyToken);
         socket.emit('spotify_token_update', { token: spotifyToken });
@@ -580,7 +603,8 @@
   function _renderParticipants(participants) {
     if (participantCount) participantCount.textContent = participants.length;
 
-    const buildList = (el) => {
+    // Sidebar list — no kick buttons
+    const buildSidebar = (el) => {
       if (!el) return;
       el.innerHTML = '';
       participants.forEach(p => {
@@ -596,8 +620,48 @@
       });
     };
 
-    buildList(participantList);
-    buildList(participantsModalList);
+    // Modal list — kick buttons for host on non-host participants
+    const buildModal = (el) => {
+      if (!el) return;
+      el.innerHTML = '';
+      participants.forEach(p => {
+        const li = document.createElement('li');
+        li.className = 'participant-item';
+        const initial = (p.username || '?')[0].toUpperCase();
+        const isSelf = p.socketId === socket.id;
+        const canKick = isHost && !p.isHost && !isSelf;
+
+        li.innerHTML = `
+          <div class="participant-avatar">${_escHtml(initial)}</div>
+          <span class="participant-name">${_escHtml(p.username)}${isSelf ? ' <span class="participant-you">(Du)</span>' : ''}</span>
+          ${p.isHost ? '<span class="participant-crown" title="Host">👑</span>' : ''}
+          ${canKick ? `
+            <button class="btn-kick" data-socketid="${_escAttr(p.socketId)}" title="${_escAttr(p.username)} rauswerfen">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+            </button>` : ''}
+        `;
+
+        if (canKick) {
+          li.querySelector('.btn-kick').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const targetId = e.currentTarget.dataset.socketid;
+            const targetName = p.username;
+            if (confirm(`${targetName} wirklich aus der Session entfernen?`)) {
+              socket.emit('kick_participant', { targetSocketId: targetId });
+            }
+          });
+        }
+
+        el.appendChild(li);
+      });
+    };
+
+    buildSidebar(participantList);
+    buildModal(participantsModalList);
   }
 
   // ── Add Song button ───────────────────────────────────────────────────────
@@ -633,8 +697,15 @@
       });
 
       xhr.addEventListener('load', () => {
-        if (xhr.status === 200) {
-          const data = JSON.parse(xhr.responseText);
+        if (uploadProgress) uploadProgress.style.display = 'none';
+        localFileInput.value = '';
+
+        if (xhr.status === 200 || xhr.status === 201) {
+          let data;
+          try { data = JSON.parse(xhr.responseText); } catch (_) {
+            toast('Upload-Antwort ungültig', 'error');
+            return;
+          }
           const track = {
             source: 'local',
             title: audioMeta.title || _stripExt(file.name),
@@ -649,16 +720,19 @@
           socket.emit('queue_add', { track });
           toast(`"${track.title}" hinzugefügt`, 'success');
         } else {
-          toast('Upload fehlgeschlagen', 'error');
+          let msg = 'Upload fehlgeschlagen';
+          try {
+            const err = JSON.parse(xhr.responseText);
+            if (err.error) msg = err.error;
+          } catch (_) {}
+          toast(msg, 'error');
         }
-        if (uploadProgress) uploadProgress.style.display = 'none';
-        localFileInput.value = '';
       });
 
       xhr.addEventListener('error', () => {
-        toast('Upload-Fehler', 'error');
         if (uploadProgress) uploadProgress.style.display = 'none';
         localFileInput.value = '';
+        toast('Netzwerkfehler beim Upload', 'error');
       });
 
       xhr.send(formData);
@@ -715,6 +789,54 @@
   participantsModalBackdrop && participantsModalBackdrop.addEventListener('click', () => {
     if (participantsModal) participantsModal.style.display = 'none';
   });
+
+  // ── QR-Code modal ─────────────────────────────────────────────────────────
+  const showQrBtn       = document.getElementById('showQrBtn');
+  const qrModal         = document.getElementById('qrModal');
+  const qrModalClose    = document.getElementById('qrModalClose');
+  const qrModalBackdrop = document.getElementById('qrModalBackdrop');
+  const qrCodeWrap      = document.getElementById('qrCodeWrap');
+  const qrJoinUrl       = document.getElementById('qrJoinUrl');
+  const qrCopyUrlBtn    = document.getElementById('qrCopyUrlBtn');
+  const qrSessionCodeDisplay = document.getElementById('qrSessionCodeDisplay');
+
+  let qrLoaded = false;
+
+  function openQrModal() {
+    if (!sessionId) return;
+    if (qrModal) qrModal.style.display = 'flex';
+    if (qrSessionCodeDisplay) qrSessionCodeDisplay.textContent = sessionId;
+    if (!qrLoaded) _loadQr();
+  }
+
+  async function _loadQr() {
+    if (!qrCodeWrap) return;
+    qrCodeWrap.innerHTML = '<div class="qr-spinner"></div>';
+    try {
+      const res = await fetch(`/api/session/${encodeURIComponent(sessionId)}/qr`);
+      const data = await res.json();
+      if (!res.ok || !data.dataUrl) throw new Error(data.error || 'QR error');
+
+      qrCodeWrap.innerHTML = `<img src="${data.dataUrl}" alt="QR Code" class="qr-image" />`;
+      if (qrJoinUrl) qrJoinUrl.textContent = data.joinUrl;
+      qrLoaded = true;
+    } catch (err) {
+      qrCodeWrap.innerHTML = '<p class="qr-error">QR konnte nicht geladen werden.</p>';
+    }
+  }
+
+  showQrBtn && showQrBtn.addEventListener('click', openQrModal);
+  qrModalClose    && qrModalClose.addEventListener('click',    () => { if (qrModal) qrModal.style.display = 'none'; });
+  qrModalBackdrop && qrModalBackdrop.addEventListener('click', () => { if (qrModal) qrModal.style.display = 'none'; });
+
+  qrCopyUrlBtn && qrCopyUrlBtn.addEventListener('click', () => {
+    const url = qrJoinUrl?.textContent;
+    if (!url) return;
+    navigator.clipboard.writeText(url).then(() => toast('Link kopiert!', 'success')).catch(() => {});
+  });
+
+  // Re-generate QR if session changes (shouldn't happen, but safe)
+  socket.on('session_created', () => { qrLoaded = false; });
 
   // ── Init Search ───────────────────────────────────────────────────────────
   // Wait until we have sessionId

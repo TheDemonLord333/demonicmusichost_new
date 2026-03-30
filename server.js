@@ -8,6 +8,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const session = require('express-session');
 const cookieParser = require('cookie-parser');
+const QRCode = require('qrcode');
 
 const authRoutes = require('./routes/auth');
 const searchRoutes = require('./routes/search');
@@ -85,6 +86,29 @@ app.get('/api/session/:id', (req, res) => {
     participantCount: session.participants.size,
     allowJoin: session.settings.allowJoin
   });
+});
+
+// QR code for joining a session
+app.get('/api/session/:id/qr', async (req, res) => {
+  const sess = sessions.get(req.params.id);
+  if (!sess) return res.status(404).json({ error: 'Session not found' });
+
+  const proto = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
+  const host  = req.headers['x-forwarded-host'] || req.headers.host;
+  const joinUrl = `${proto}://${host}/?code=${sess.id}`;
+
+  try {
+    const dataUrl = await QRCode.toDataURL(joinUrl, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 300,
+      color: { dark: '#f0eef8', light: '#0e0d14' }
+    });
+    res.json({ dataUrl, joinUrl });
+  } catch (err) {
+    console.error('[QR] Error:', err);
+    res.status(500).json({ error: 'QR generation failed' });
+  }
 });
 
 // ─── Socket.io ────────────────────────────────────────────────────────────────
@@ -345,7 +369,30 @@ io.on('connection', (socket) => {
     console.log('[DMH] Client disconnected:', socket.id);
   });
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
+  // ── Kick Participant (host only) ────────────────────────────────────────────
+  socket.on('kick_participant', ({ targetSocketId }) => {
+    const sess = getSession(socket.id);
+    if (!sess || !isHost(socket.id, sess)) return;
+    if (targetSocketId === socket.id) return; // can't kick yourself
+
+    const target = sess.participants.get(targetSocketId);
+    if (!target) return;
+
+    // Notify the kicked user first
+    io.to(targetSocketId).emit('kicked', { by: sess.participants.get(socket.id)?.username || 'Host' });
+
+    // Remove from session
+    sess.participants.delete(targetSocketId);
+    socketToSession.delete(targetSocketId);
+
+    io.to(sess.id).emit('participant_left', {
+      username: target.username,
+      participants: Array.from(sess.participants.values())
+    });
+    console.log(`[DMH] ${target.username} kicked from session ${sess.id}`);
+  });
+
+  // ── Kick Participant (host only) ────────────────────────────────────────────
   function getSession(socketId) {
     const sessId = socketToSession.get(socketId);
     return sessId ? sessions.get(sessId) : null;
